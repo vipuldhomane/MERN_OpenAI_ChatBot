@@ -2,6 +2,8 @@ import User from "../models/Users.js";
 import { NextFunction, Request, Response } from "express";
 
 import { compare, hash } from "bcrypt";
+import { createToken } from "../utils/token-manage.js";
+import { COOKIE_NAME } from "../utils/constants.js";
 
 // get data of all the users
 export const getAllUsers = async (
@@ -41,7 +43,35 @@ export const userSignUp = async (
     const hashedPassword = await hash(password, 10);
     const user = new User({ name, email, password: hashedPassword });
     user.save();
-    return res.status(200).json({ message: "Ok", userId: user._id.toString() });
+
+    // generate token and store cookie
+    // clear cookie if already exits
+    res.clearCookie(COOKIE_NAME, {
+      path: "/",
+      httpOnly: true,
+      domain: "localhost",
+      signed: true,
+    });
+
+    // Generate token
+    const token = createToken(user._id.toString(), user.email, "7d");
+
+    // setting the date 7 days later
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+
+    // setting the cookie
+    res.cookie(COOKIE_NAME, token, {
+      path: "/",
+      httpOnly: true,
+      domain: "localhost",
+      expires,
+      signed: true,
+    });
+
+    return res
+      .status(200)
+      .json({ message: "Ok", email: user.email, name: user.name });
   } catch (err) {
     console.log(err);
     return res.status(200).json({ message: "ERROR", cause: err.message });
@@ -68,8 +98,30 @@ export const userLogIn = async (
     if (!isPasswordCorrect) {
       return res.status(403).send("Incorrect PassWord");
     }
+    // clear the previous cookies in case of re login
+    res.clearCookie(COOKIE_NAME, {
+      path: "/",
+      httpOnly: true,
+      domain: "localhost",
+      signed: true,
+    });
 
-    return res.status(201).json({ message: "Ok", userId: user._id.toString() });
+    // Generate token
+    const token = createToken(user._id.toString(), user.email, "7d");
+    // setting the cookie
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+    res.cookie(COOKIE_NAME, token, {
+      path: "/",
+      httpOnly: true,
+      domain: "localhost",
+      expires,
+      signed: true,
+    });
+
+    return res
+      .status(200)
+      .json({ message: "Ok", email: user.email, name: user.name });
   } catch (err) {
     console.log(err);
     return res.status(200).json({ message: "ERROR", cause: err.message });
